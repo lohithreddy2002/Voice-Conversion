@@ -91,11 +91,11 @@ class Encoder(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, out_channels=3, dim=64, n_upsample=2, shared_block=None):
+    def __init__(self, out_channels=3, dim=64, n_upsample=2, shared_block=None,multi_scale="down"):
         super(Generator, self).__init__()
 
         self.shared_block = shared_block
-
+        self.mult_scale = multi_scale
         layers = []
         dim = dim * 2 ** n_upsample
         # Residual blocks
@@ -113,15 +113,29 @@ class Generator(nn.Module):
 
         # Output layer
         layers += [nn.ReflectionPad2d(3), nn.Conv2d(dim, out_channels, 7), nn.Tanh()]
-        self.first_conv = nn.Conv2d(out_channels,out_channels,kernel_size=4,padding=1,stride=2)
+        if self.multi_scale == "down":
+            self.first_conv = nn.Conv2d(out_channels,out_channels,kernel_size=4,padding=1,stride=2)
+        if self.multi_scale == "up":
+            self.first_conv = nn.ConvTranspose2d(out_channels, out_channels, 4, stride=2, padding=1)
+        if self.mult_scale == "both":
+            self.first_conv = nn.ConvTranspose2d(out_channels, out_channels, 4, stride=2, padding=1)
+            self.first_conv_down = nn.Conv2d(out_channels,out_channels,kernel_size=4,padding=1,stride=2)
         self.model_blocks = nn.Sequential(*layers)
 
     def forward(self, x):
         x = self.shared_block(x)
         x = self.model_blocks(x)
-        y = self.first_conv(x)
-        z = self.first_conv(y)
-        return x,y,z
+        if self.mult_scale == "down" or self.mult_scale == "up":
+            y = self.first_conv(x)
+            z = self.first_conv(y)
+            return x,y,z
+        if self.mult_scale == "up":
+            y = self.first_conv(x)
+            y_down = self.first_conv_down(x)
+            z = self.first_conv(y)
+            z_down = self.first_conv_down(y_down)
+            return x,y,z,y_down,z_down
+       
 
 
 ##############################
